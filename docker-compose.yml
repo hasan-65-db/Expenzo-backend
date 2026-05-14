@@ -1,0 +1,51 @@
+services:
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=spendwisely
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+  # The Redis service
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+  worker:
+    build: .
+    command: celery -A django_rest_main worker --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=1
+    depends_on:
+      - redis
+      - db
+  celery-beat:
+    build: .
+    command: celery -A django_rest_main beat -l info
+    depends_on:
+      - redis
+      - db
+
+
+  # Your Django Application
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379/0
+    stdin_open: true
+    tty: true
+    depends_on:
+      - redis
+      - db
